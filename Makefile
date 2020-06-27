@@ -3,6 +3,7 @@ TITLE		:= QUAKE0002
 SOURCES		:= source
 SHADERS     := shaders
 INCLUDES	:= include
+HAVE_SHACCCG ?= 1
 
 LIBS = -lvitaGL -lvorbisfile -lvorbis -logg -lspeexdsp -lmpg123 -lmathneon \
 	-lSceLibKernel_stub -lSceAppMgr_stub -lSceSysmodule_stub -ljpeg \
@@ -130,6 +131,11 @@ CFLAGS  = -ffast-math -mtune=cortex-a9 -mfpu=neon -fsigned-char -g -Wl,-q -O2 \
 CFLAGS += -DOSTYPE=\"$(OSTYPE)\" -DARCH=\"$(ARCH)\"
 CXXFLAGS  = $(CFLAGS) -fno-exceptions -std=gnu++11 -fpermissive
 ASFLAGS = $(CFLAGS)
+
+ifeq ($(HAVE_SHACCCG),1)
+LIBS +=  -lSceShaccCg_stub
+CXXFLAGS += -DHAVE_SHACCCG
+endif
 
 all: $(TARGET).vpk
 

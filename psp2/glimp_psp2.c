@@ -32,6 +32,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <vitasdk.h>
 #include "vitaGL.h"
 #include "../ref_gl/gl_local.h"
+#if defined(HAVE_SHACCG)
+#include "shaders.h"
+#endif
 
 qboolean GLimp_InitGL (void);
 
@@ -124,6 +127,12 @@ int GLimp_Init( void *hinstance, void *wndproc )
 	vglUseVram(GL_TRUE);
 
 	gl_config.allow_cds = true;
+#if defined(HAVE_SHACCCG)
+  int shacccg_module = sceKernelLoadStartModule("app0:/sce_module/libshacccg.suprx", 0, NULL, 0, NULL, NULL);
+  if (shacccg_module < 0)
+    shaccg_module = sceKernelLoadStartModule("ux0:/tai/libshacccg.suprx", 0, NULL, 0, NULL, NULL);
+  SceShaccCg_6F01D573(malloc, free);
+#endif
 	return true;
 }
 
@@ -146,6 +155,85 @@ void GL_LoadShader(const char* filename, GLuint idx, GLboolean fragment){
 	else glShaderBinary(1, &vs[idx], 0, res, size);
 	free(res);
 }
+
+#if defined(HAVE_SHACCCG)
+void GL_CompileAndLoadShader(const char* filename, GLuint idx, GLboolean fragment){
+  int ret;
+  SceShaccCgSourceFile s_input;
+
+  FILE *input = fopen(filename, "rb");
+	if (!input) {
+		printf("%s: cannot open\n", filename);
+    return NULL;
+	}
+	fseek(input, 0, SEEK_END);
+	s_input.size = ftell(input);
+	fseek(input, 0, SEEK_SET);
+	s_input.program = malloc(s_input.size);
+	fread(s_input.program, s_input.size, 1, input);
+	fclose(input);
+
+  s_input.fileName = "<built-in>";
+
+  shader_first callbacks = {0};
+  callbacks.field_0 = (int)&s_input;
+
+  SceShaccCgCompileOptions options = {0};
+  options.mainSourceFile = s_input.fileName;
+  options.targetProfile =  fragment == true ? SCE_SHACCCG_PROFILE_FP : SCE_SHACCCG_PROFILE_VP;
+  options.entryFunctionName = "main";
+  options.macroDefinitionCount = 0;
+  const char *str = "SHADER_API_PSM";
+  options.macroDefinitions = &str;
+  options.useFx = 1;
+  options.noStdlib = 0;
+  options.optimizationLevel = 3;
+  options.useFastmath = 1;
+  options.useFastint = 0;
+  options.warningsAsErrors = 0;
+  options.performanceWarnings = 0;
+  options.warningLevel = 1;
+  options.pedantic = 3;
+  options.pedanticError = 0;
+
+  SceShaccCgCompileOutput *r = sceShaccCgCompileProgram(&options, &callbacks, 0);
+  if (!r) {
+    printf("Unknown error\n");
+    return NULL;
+	}
+
+  int shacccg_err = 0;
+  for (int i = 0; i < r->diagnosticCount; ++i) {
+    const SceShaccCgDiagnosticMessage *e = &r->diagnostics[i];
+    uint32_t x = 0, y = 0;
+    if (e->location) {
+      x = e->location->lineNumber;
+      y = e->location->columnNumber;
+    }
+  switch (e->level) {
+    case SCE_SHACCCG_DIAGNOSTIC_LEVEL_INFO:
+      printf("INFO (%lu, %lu):  \n", x, y);
+      break;
+    case SCE_SHACCCG_DIAGNOSTIC_LEVEL_WARNING:
+      printf("WARN (%lu, %lu):  \n", x, y);
+      break;
+    case SCE_SHACCCG_DIAGNOSTIC_LEVEL_ERROR:
+      printf("ERROR (%lu, %lu):  \n", x, y);
+      shacccg_err = 1;
+      break;
+    }
+    printf("%s\n", e->message);
+  }
+
+  if (!shacccg_err) {
+    if (fragment) glShaderBinary(1, &fs[idx], 0, (void *)r->programData, (long int)r->programSize);
+    else glShaderBinary(1, &vs[idx], 0, (void *)r->programData, (long int)r->programSize);
+    sceShaccCgDestroyCompileOutput(r);
+  }
+
+  free(s_input.program);
+}
+#endif
 
 int state_mask = 0;
 GLint monocolor;
@@ -270,6 +358,22 @@ void GL_ResetShaders(){
 		vs[i] = glCreateShader(GL_VERTEX_SHADER);
 	}
 
+#if defined(HAVE_SHACCCG)
+	GL_CompileAndLoadShader("app0:shaders/modulate_f.cg", MODULATE, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/modulate_rgba_f.cg", MODULATE_WITH_COLOR, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/replace_f.cg", REPLACE, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/modulate_alpha_f.cg", MODULATE_A, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/modulate_rgba_alpha_f.cg", MODULATE_COLOR_A, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/replace_alpha_f.cg", REPLACE_A, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/texture2d_v.cg", TEXTURE2D, GL_FALSE);
+	GL_CompileAndLoadShader("app0:shaders/texture2d_rgba_v.cg", TEXTURE2D_WITH_COLOR, GL_FALSE);
+
+	GL_CompileAndLoadShader("app0:shaders/rgba_f.cg", RGBA_COLOR, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/vertex_f.cg", MONO_COLOR, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/rgba_alpha_f.cg", RGBA_A, GL_TRUE);
+	GL_CompileAndLoadShader("app0:shaders/rgba_v.cg", COLOR, GL_FALSE);
+	GL_CompileAndLoadShader("app0:shaders/vertex_v.cg", VERTEX_ONLY, GL_FALSE);
+#else
 	GL_LoadShader("app0:shaders/modulate_f.gxp", MODULATE, GL_TRUE);
 	GL_LoadShader("app0:shaders/modulate_rgba_f.gxp", MODULATE_WITH_COLOR, GL_TRUE);
 	GL_LoadShader("app0:shaders/replace_f.gxp", REPLACE, GL_TRUE);
@@ -284,6 +388,7 @@ void GL_ResetShaders(){
 	GL_LoadShader("app0:shaders/rgba_alpha_f.gxp", RGBA_A, GL_TRUE);
 	GL_LoadShader("app0:shaders/rgba_v.gxp", COLOR, GL_FALSE);
 	GL_LoadShader("app0:shaders/vertex_v.gxp", VERTEX_ONLY, GL_FALSE);
+#endif
 
 	// Setting up programs
 	for (i=0;i<9;i++){
