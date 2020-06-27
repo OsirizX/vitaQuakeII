@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <vitasdk.h>
 #include "vitaGL.h"
 #include "../ref_gl/gl_local.h"
-#if defined(HAVE_SHACCG)
+#if defined(HAVE_SHACCCG)
 #include "shaders.h"
 #endif
 
@@ -130,7 +130,7 @@ int GLimp_Init( void *hinstance, void *wndproc )
 #if defined(HAVE_SHACCCG)
   int shacccg_module = sceKernelLoadStartModule("app0:/sce_module/libshacccg.suprx", 0, NULL, 0, NULL, NULL);
   if (shacccg_module < 0)
-    shaccg_module = sceKernelLoadStartModule("ux0:/tai/libshacccg.suprx", 0, NULL, 0, NULL, NULL);
+    shacccg_module = sceKernelLoadStartModule("ux0:/tai/libshacccg.suprx", 0, NULL, 0, NULL, NULL);
   SceShaccCg_6F01D573(malloc, free);
 #endif
 	return true;
@@ -157,9 +157,14 @@ void GL_LoadShader(const char* filename, GLuint idx, GLboolean fragment){
 }
 
 #if defined(HAVE_SHACCCG)
+SceShaccCgSourceFile s_input;
+
+void *get_input(void){
+    return &s_input;
+}
+
 void GL_CompileAndLoadShader(const char* filename, GLuint idx, GLboolean fragment){
   int ret;
-  SceShaccCgSourceFile s_input;
 
   FILE *input = fopen(filename, "rb");
 	if (!input) {
@@ -176,7 +181,7 @@ void GL_CompileAndLoadShader(const char* filename, GLuint idx, GLboolean fragmen
   s_input.fileName = "<built-in>";
 
   shader_first callbacks = {0};
-  callbacks.field_0 = (int)&s_input;
+  callbacks.field_0 = (int)get_input;
 
   SceShaccCgCompileOptions options = {0};
   options.mainSourceFile = s_input.fileName;

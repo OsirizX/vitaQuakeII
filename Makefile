@@ -134,7 +134,7 @@ ASFLAGS = $(CFLAGS)
 
 ifeq ($(HAVE_SHACCCG),1)
 LIBS +=  -lSceShaccCg_stub
-CXXFLAGS += -DHAVE_SHACCCG
+CFLAGS += -DHAVE_SHACCCG
 endif
 
 all: $(TARGET).vpk
